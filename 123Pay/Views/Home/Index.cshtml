@@ -1,0 +1,292 @@
+﻿@using _123Pay.Models;
+@using _123Pay.Entities;
+@using _123Pay.Enums;
+@model PaginatedList<Payment>
+
+<div class="container-fluid">
+    <h1 class="title-1">Payments</h1>
+    <button onclick="showNewPaymentModal()" type="button" class="btn btn-primary">Create Payment Request</button>
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th scope="col">Reference No</th>
+                <th scope="col">Merchant</th>
+                <th scope="col">Account No</th>
+                <th scope="col">Account Name</th>
+                <th scope="col">Other Details</th>
+                <th scope="col">Amount</th>
+                <th scope="col">Status</th>
+                <th scope="col">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if(Model.Items is null)
+            {
+                <tr>
+                    <td colspan="7">No Records</td>
+                </tr>
+            }
+
+            @if (Model.Items is not null)
+            {
+                @foreach (var item in Model.Items)
+                {
+                    <tr>
+                        <td scope="row">@item.ReferenceNo.ToString()</td>
+                        <td>@item.Merchant</td>
+                        <td>@item.AccountNo</td>
+                        <td>@item.AccountName</td>
+                        <td>@item.OtherDetails</td>
+                        <td>@item.Amount</td>
+                        <td>@Enum.GetName(typeof(PaymentStatus), item.Status)</td>
+                        <td>
+                            @{
+                                switch(item.Status)
+                                {
+                                    case(PaymentStatus.Processing):
+                                        <div class="btn-group" role="group" aria-label="Payment Actions">
+                                            <button onclick="showPayModal('@item.ReferenceNo')" class="btn btn-outline-success btn-sm">Paid</button>
+                                            <button onclick="showRejectModal('@item.ReferenceNo')" class="btn btn-outline-danger btn-sm">Reject</button>
+                                        </div>
+                                        break;
+                                    case(PaymentStatus.Done):
+                                        <div class="btn-group" role="group" aria-label="Payment Actions">
+                                             <a class="btn btn-outline-primary btn-sm" href="/uploads/@(System.IO.Path.GetFileName(item.AttachmentPath))" target="_blank">
+                                                View
+                                            </a>
+                                        </div>
+                                        break;
+                                    case(PaymentStatus.Failed):
+                                        <div class="btn-group" role="group" aria-label="Payment Actions">
+                                            <a class="btn btn-outline-primary btn-sm @(string.IsNullOrEmpty(item.AttachmentPath) ? "disabled" : "")" href="/uploads/@(System.IO.Path.GetFileName(item.AttachmentPath))" target="_blank">
+                                                View
+                                            </a>
+                                        </div>
+                                        break;
+                                    default:
+                                        <div class="btn-group" role="group" aria-label="Payment Actions">
+                                            <button onclick="processPayment('@item.ReferenceNo')" class="btn btn-outline-primary btn-sm">Process</button>
+                                        </div>
+                                        break;
+                                }
+                            }
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+
+    <nav aria-label="Page navigation">
+      <ul class="pagination justify-content-center">
+        <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
+          <a class="page-link" href="@(Model.HasPreviousPage ? Url.Action("Index", new { PageNumber = Model.PageNumber - 1, PageSize = Model.PageSize }) : "#")" aria-label="Previous">
+            <span aria-hidden="true">&laquo;</span>
+          </a>
+        </li>
+        @for(int i = 1; i <= Model.TotalPages; i++)
+        {
+            <li class="page-item @(Model.PageNumber == i ? "disabled" : "")"><a class="page-link" href="@(Model.PageNumber != i ? @Url.Action("Index", new { PageNumber = i, PageSize = Model.PageSize }) : "#")">@i</a></li>
+        }
+        <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
+          <a class="page-link" href="@Url.Action("Index", new { PageNumber = Model.PageNumber + 1, PageSize = Model.PageSize })" aria-label="Next">
+            <span aria-hidden="true">&raquo;</span>
+          </a>
+        </li>
+      </ul>
+</nav>
+</div>
+
+<!-- Successful payment request attachment -->
+<div class="modal fade" id="payModal" tabindex="-1" aria-labelledby="payModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="payModalLabel">Payment Attachment</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+            <label for="formFile" class="form-label">Attach Receipt</label>
+            <input class="form-control" type="file" id="payFormFile">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button onclick="SaveChanges()" type="button" class="btn btn-primary">Save changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Reject payment request (attachment is optional)  -->
+<div class="modal fade" id="rejectModal" tabindex="-1" aria-labelledby="rejectModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="rejectModalLabel">Reject Attachment</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+            <label for="formFile" class="form-label">Attach File</label>
+            <input class="form-control" type="file" id="rejectFormFile">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button onclick="SaveChanges()" type="button" class="btn btn-primary">Save changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- New payment request -->
+<div class="modal fade" id="newPaymentModal" tabindex="-1" aria-labelledby="newPaymentModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="newPaymentModalLabel">New Payment Request</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="newPaymentForm" onsubmit="this.preventDefault();">
+            <div class="mb-3">
+                <label for="merchant" class="form-label">Merchant</label>
+                <input class="form-control" type="text" name="merchant" id="merchant">
+            </div>
+            <div class="mb-3">
+                <label for="accountNo" class="form-label">Account No</label>
+                <input class="form-control" type="text" name="accountNo" id="accountNo">
+            </div>
+            <div class="mb-3">
+                <label for="accountName" class="form-label">Account Name</label>
+                <input class="form-control" type="text" name="accountName" id="accountName">
+            </div>
+            <div class="mb-3">
+                <label for="amount" class="form-label">Amount</label>
+                <input class="form-control" type="number" name="amount" id="amount">
+            </div>
+            <div class="mb-3">
+                <label for="otherDetails" class="form-label">Other Details</label>
+                <textarea rows="3" class="form-control" name="otherDetails" id="otherDetails"></textarea>
+            </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button onclick="SaveChanges()" class="btn btn-primary">Create Request</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+@section Scripts {
+    <script>
+        const base_url = '/api/Payment';
+        var selectedPayment = null;
+        var action = null;
+
+        var payModal = new bootstrap.Modal(document.getElementById('payModal'), {
+                keyboard: false
+            });
+
+        var rejectModal = new bootstrap.Modal(document.getElementById('rejectModal'), {
+                keyboard: false
+            });
+
+        var newPaymentModal = new bootstrap.Modal(document.getElementById('newPaymentModal'), {
+                keyboard: false
+            });
+
+        function processPayment(referenceNo) {
+            fetch(`${base_url}/Process/${referenceNo}`, {
+                method: 'PUT'
+            })
+            .then(response => {
+                console.log(response);
+                location.reload();
+            })
+            .catch(error => console.log(error));
+        }
+
+        function showPayModal(referenceNo) {
+            selectedPayment = referenceNo;
+            action = 'pay'
+            payModal.show();
+        }
+
+        function showRejectModal(referenceNo) {
+            selectedPayment = referenceNo;
+            action = 'reject'
+            rejectModal.show();
+        }
+
+        function showNewPaymentModal() {
+            action = 'new';
+            newPaymentModal.show();
+        }
+
+        function SaveChanges() {
+            if ((!!!selectedPayment || !!!action) && action !== 'new') return;
+
+            const formData = new FormData();
+
+            switch(action) {
+                case 'pay':
+                    formData.append('attachment', document.getElementById('payFormFile').files[0])
+                    fetch(`${base_url}/Paid/${selectedPayment}`, {
+                        method: 'PUT',
+                        body: formData
+                    })
+                    .then(response => {
+                        console.log(response);
+                        location.reload();
+                    })
+                    .catch(error => console.log(error));
+                    break;
+                case 'reject':
+                    if(document.getElementById('rejectFormFile').files) {
+                        formData.append('attachment', document.getElementById('rejectFormFile').files[0])
+                    }
+                    fetch(`${base_url}/Reject/${selectedPayment}`, {
+                        method: 'PUT',
+                        body: formData
+                    })
+                    .then(response => {
+                        console.log(response);
+                        location.reload();
+                    })
+                    .catch(error => console.log(error));
+                    break;
+                case 'new': 
+                    const form = document.getElementById('newPaymentForm');
+                    const data = {
+                        merchant: form.querySelector('input[name="merchant"]').value,
+                        accountNo: form.querySelector('input[name="accountNo"]').value,
+                        accountName: form.querySelector('input[name="accountName"]').value,
+                        amount: +form.querySelector('input[name="amount"]').value,
+                        otherDetails: form.querySelector('textarea[name="otherDetails"]').value,
+                    };
+
+                    fetch(base_url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(data)
+                    })
+                    .then(response => {
+                        console.log(response);
+                        location.reload();
+                    })
+                    .catch(error => console.log(error));
+                    break;
+            }
+        }
+
+        document.getElementById('payModal').addEventListener('hidden.bs.modal', function(event) {
+            selectedPayment = null;
+        });
+    </script>
+}

@@ -1,0 +1,25 @@
+﻿body {
+    margin: 0;
+    padding: 0;
+}
+
+main {
+    padding: 30px 15px;
+}
+
+table {
+    margin: 0 auto;
+    font-size: 1rem;
+    color: #212529;
+    vertical-align: top;
+    border-color: #dee2e6;
+}
+thead {
+    display: table-header-group;
+    border-bottom: 3px solid #000;
+}
+
+thead tr th {
+    padding: .5rem;
+    font-weight: bold;
+}
